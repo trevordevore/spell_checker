@@ -1,2 +1,89 @@
-# spell_checker
-Spell Checker for LiveCode desktop applications.
+# spellChecker for LiveCode
+
+spellChecker is a spell checking library for LiveCode. It uses NSSpellChecker on macOS and Hunspell on Windows to provide spell checking functionality.
+
+The API consists of all of the public handlers in the `spell_checker.livecodescript` file as well as handlers that begin with `spellchecker` in the `nsspellchecker.lcb` and `hunspell.lcb` files.
+
+## Obtaining dictionaries that work with Hunspell
+
+On macOS the system dictionaries are used so there is no configuration necessary.
+
+On Windows you must distribute dictionaries with your application. You can find dictionaries that work with Hunspell in the following Github repo:
+
+https://github.com/wooorm/dictionaries
+
+## Initialization
+
+### macOS
+
+On macOS all initialization occurs when the `spell_checker.livecodescript` stack is put in use.
+
+### Other Systems
+
+On other platforms call `spellcheckerInitialize` and pass in the folder where dictionaries are stored, the dictionary language to load (the name of the dictionary folder), and the (optional) path to the file where words that the user adds to the dictionary will be stored. If you don't pass in the last parameter then the words will only be added to the in-memory dictionary during the current session.
+
+```
+put levureAppFolder() & "/assets/dictionaries" into tDictionariesFolder
+put "en" into tLanguage
+put userDictionaryFolder() & "/en_user_words.txt" into tAddWordsFile
+spellcheckerInitialize tDictionariesFolder, tLanguage, tAddWordsFile
+```
+
+To change the language during a session call `spellcheckerSetLanguage`:
+
+```
+put "fr" into tLanguage
+put userDictionaryFolder() & "/fr_user_words.txt" into tAddWordsFile
+spellcheckerSetLanguage tLanguage, tAddWordsFile
+```
+
+## Marking misspelled words in a field
+
+Spell checking an entire field is a single call. It will perform the spell check and flag the misspelled words.
+
+```
+spellcheckerFlagMisspelledWordsInField the long id of field "Document"
+```
+
+## Finding misspelled words in a string
+
+You can also spell check a string and specify the character to start spell checking from.
+
+```
+put the text of field "Document" into tText
+put 30 into tCharOffset
+put spellcheckerFindMisspelledWords(tText, tCharOffset) into tCharRanges
+set the flaggedRanges of field "Document" to tCharRanges
+```
+
+## Guessing Words
+
+```
+put spellcheckerGuessesForWord(tWord) into tGuesses
+```
+
+## List available dictionaries
+
+If you would like to display a menu of dictionaries that the user can select from use `spellcheckerAvailableLanguages()`. This is usually only necessary on non-macOS systems.
+
+```
+put spellcheckerAvailableLanguages() into tLanguages
+```
+
+## Adding to your project
+
+The repo is organized in the Levure Helper format so that it can be dropped right into the **helpers** folder of an app built on the Levure framework.
+
+To use in a non-Levure project you will need to do the following:
+
+1) Compile the hunspell.lcb extension and install it into your LiveCode environment. (Windows)
+2) Add the extension to your standalone using the Standalone Settings.
+3) Compile the nsspellchecker.lcb extension and install it in your LiveCode environment. (macOS)
+4) Add the extension to your standalone using the Standalone Settings.
+3) Add the spell_checker.livecodescript stack and `start using` it as a library.
+
+# Additional information on dictionary files
+
+The following web page may be helpful in understanding how the .dic and .aff files that make up a dictionary are formatted:
+
+https://www.chromium.org/developers/how-tos/editing-the-spell-checking-dictionaries

@@ -1,0 +1,20 @@
+libraries:
+  - filename: spell_checker.livecodescript
+extensions:
+  - filename: nsspellchecker.lcm
+    source: nsspellchecker.lcb
+    platform: macos
+  - filename: hunspell.lcm
+    source: hunspell.lcb
+    code:
+      - libhunspell.dll
+    platform: windows
+package files:
+  - filename: code/x86-win32/libhunspell.dll
+    destination: ./Externals
+    platform: windows
+    architecture: 32
+  - filename: code/x86_64-win32/libhunspell.dll
+    destination: ./Externals
+    platform: windows
+    architecture: 64
