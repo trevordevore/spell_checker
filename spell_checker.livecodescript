@@ -1,6 +1,6 @@
 script "community.livecode.trevordevore.spellchecker.library"
 
-constant kVersion = "0.9.0"
+constant kVersion = "0.9.1"
 constant kCategoryLetter = "letter"
 constant kCategoryNumber = "number"
 constant kCategoryPunctuation = "punctuation"
@@ -11,6 +11,7 @@ local sTLDsA
 local sRootDictionariesFolders
 local sLanguage
 local sAddWordsFile
+local sWordChars
 
 
 on libraryStack
@@ -153,6 +154,24 @@ end spellcheckerGetLanguage
 
 
 /**
+Summary: Returns the WORDCHARS value.
+
+Description:
+WORDCHARS is set using `spellcheckerLoadWordCharsFromAffixFile` or `spellcheckerSetWordChars`.
+Not applicable on macOS.
+
+Returns: String
+*/
+function spellcheckerGetWordChars
+  if the platform is "macos" then
+    return empty
+  else
+    return sWordChars
+  end if
+end spellcheckerGetWordChars
+
+
+/**
 Summary: Loads a Hunspell dictionary for a language.
 
 Parameters:
@@ -179,6 +198,13 @@ private command _loadDictionaryForLanguage pLanguage
     filter tDictFiles with "*.dic"
 
     if tAffixFiles is not empty then
+      _loadWordCharsFromAffixFile tFolder & "/" & pLanguage & "/" & line 1 of tAffixFiles
+      put the result into tError
+
+      if tError is not empty then exit repeat
+    end if
+
+    if tAffixFiles is not empty then
       hunspellInitialize \
             tFolder & "/" & pLanguage & "/" & line 1 of tAffixFiles, \
             tFolder & "/" & pLanguage & "/" & line 1 of tDictFiles
@@ -198,12 +224,55 @@ private command _loadDictionaryForLanguage pLanguage
     end if
   end repeat
 
-  if not wasInitialized then
+  if tError is empty and not wasInitialized then
     put "dictionary folder for language" && pLanguage && "was not found" into tError
   end if
 
   return tError for error
 end _loadDictionaryForLanguage
+
+
+/*
+Summary: Find and load the WORDCHARS variable in an affix file.
+
+Description:
+A Huspell Affix file (.aff) has a `WORDCHARS` setting which lists additional
+characters that should be considered part of a word. The Hunspell C API does
+not provide access to this setting (only the C++ does) so it needs to be manually
+extracted from the `.aff` file and then set using this command.
+
+Returns: Error message
+*/
+command _loadWordCharsFromAffixFile pAffixFile
+  local tError
+
+  open file pAffixFile for "utf-8" text read
+  put the result into tError
+  if tError is not empty then
+    put "unable to open affix file" && quote & pAffixFile & quote & ":" && tError into tError
+  end if
+
+  if tError is empty then
+    repeat forever
+      read from file pAffixFile for 1 line
+      if the result is "EOF" then exit repeat
+      put the result into tError
+      if tError is not empty then
+        put "unable to read from affix file" && quote & pAffixFile & quote & ":" && tError into tError
+        exit repeat
+      end if
+
+      if it begins with "WORDCHARS" then
+        put word 1 to -1 of (char 10 to -1 of it) into sWordChars
+        exit repeat
+      end if
+    end repeat
+
+    close file pAffixFile
+  end if
+
+  return tError
+end _loadWordCharsFromAffixFile
 
 
 /**
@@ -547,8 +616,11 @@ private function _hunspellFindMisspelledWords pText, pOffset
 
       local tNextCategory
       put _codepointCategory(codepoint 1 of tNextCharacter) into tNextCategory
-      if tNextCategory is kCategoryLetter or tNextCategory is kCategoryNumber or tNextCategory is kCategoryNonBreaking \
-            or (tInsideURL and tNextCategory is not kCategoryWhitespace) then
+      if tNextCategory is kCategoryLetter \
+            or tNextCategory is kCategoryNumber \
+            or tNextCategory is kCategoryNonBreaking \
+            or (tInsideURL and tNextCategory is not kCategoryWhitespace) \
+            then
         # Continue with word
         add 1 to tEndIndex
         put tNextCategory into tCategory
@@ -565,6 +637,12 @@ private function _hunspellFindMisspelledWords pText, pOffset
           # Found url
           put true into tInsideURL
           add 3 to tEndIndex
+        else if tNextCharacter is among the characters of sWordChars then
+          # Continue with word
+          # sWordChars is the `WORDCHARS` value from the Hunspell `.aff` file. See `hunspellSetWordChars`.
+          add 1 to tEndIndex
+          put tNextCategory into tCategory
+          put tNextCharacter is kJoinDomain into tPotentialDomain
         else if (tNextCharacter is kJoinEmail or tNextCharacter is kJoinDomain) \
               and (tCategory is kCategoryNumber or tCategory is kCategoryLetter) \
               and (tNextCategory is kCategoryNumber or tNextCategory is kCategoryLetter) then
