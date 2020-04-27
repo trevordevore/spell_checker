@@ -151,11 +151,9 @@ The repo is organized in the Levure Helper format so that it can be dropped righ
 
 To use in a non-Levure project you will need to do the following:
 
-1) Compile the hunspell.lcb extension and install it into your LiveCode environment. (Windows)
-2) Add the extension to your standalone using the Standalone Settings.
-3) Compile the nsspellchecker.lcb extension and install it in your LiveCode environment. (macOS)
-4) Add the extension to your standalone using the Standalone Settings.
-3) Add the spell_checker.livecodescript stack and `start using` it as a library.
+1) Download the hunspell and nsspellchecker .lce files from the latest release on the Releases page: https://github.com/trevordevore/spell_checker/releases/
+2) Install the .lce files in LiveCode: https://lessons.livecode.com/m/4071/l/1031437-how-to-install-an-extension-using-the-extension-manager
+3) Open the spell_checker.livecodescript stack and `start using` it as a library.
 
 # Additional information on dictionary files
 
