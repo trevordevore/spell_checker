@@ -545,6 +545,189 @@ end spellcheckerFindMisspelledWords
 
 
 /**
+Summary: Checks to see if the user just finished typing a word and spell checks it if they did.
+
+Parameters:
+pUserJustDeletedCharacter: Pass in `true` if user just used `backspaceKey` or `deleteKey` to delete text. Default is `false`.
+
+Description:
+If no text is selected and the selectedChunk is preceded by a character that ends a word then
+the previous word will be spell checked and flagged if misspelled.
+
+Returns: nothing
+*/
+command spellcheckerCheckLastWordTypedByUser
+  local tChunk
+
+  put the selectedChunk into tChunk
+
+  # Only check if there is no selected text.
+  if word 4 of tChunk < word 2 of tChunk then
+    local tId, tCharNum
+    local spellCheckLastWord = false
+
+    put word 4 of tChunk into tCharNum
+    put the short id of the selectedField into tId
+
+    put spellcheckerCharacterEndsWord(character tCharNum of field id tId) into spellCheckLastWord
+
+    if spellCheckLastWord then
+      local tFirstChar, tLastChar, i
+
+      # Make sure end of word char doesn't carry over flagged setting
+      if tCharNum > 0 then
+        set the flagged of character tCharNum of field id tId to false
+      end if
+
+      ## look for range to check
+      put 1 into tFirstChar
+      put max(1, tCharNum - 1) into tLastChar
+
+      repeat with i = tLastChar down to 1
+        if _characterEndsWord(character i of field id tId) then
+          put i + 1 into tFirstChar
+
+          # Don't spell check if adding additional spaces
+          if tFirstChar is tCharNum - 1 then
+            set the flagged of character tFirstChar to tLastChar of field id tId to false
+            put false into spellCheckLastWord
+            exit repeat
+          else
+            exit repeat
+          end if
+        end if
+      end repeat
+
+      # Spell check "in time" so that we don't slow down the users typing.
+      if spellCheckLastWord then
+        local tField
+
+        put the long id of the target into tField
+        send "__spellcheckerCheckWord tField, tFirstChar, tLastChar" to the target in 10 milliseconds
+      end if
+    end if
+  end if
+
+  return empty
+end spellcheckerCheckLastWordTypedByUser
+
+
+/**
+Summary: If the selection includes a single word it will be spell checked.
+
+Returns: nothing
+*/
+command spellcheckerCheckSelectedWord
+  repeat for each character tChar in the selectedText
+    if _characterEndsWord(tChar) then
+      return empty
+    end if
+  end repeat
+
+  if not spellcheckerCheckWord(the selectedText) then
+    set the flagged of the selectedChunk to true
+  end if
+end spellcheckerCheckSelectedWord
+
+
+/**
+Summary: Spell checks word surrounding insertion point when there is no text selection.
+
+Description:
+If no text is selected then this handler will find the word surrounding
+the insertion point and spell check it.
+
+Returns: nothing
+*/
+command spellcheckerCheckWordAroundInsertionPoint
+  local tChunk
+
+  put the selectedChunk into tChunk
+  put tChunk
+
+  # Only check if there is no selected text.
+  if word 4 of tChunk < word 2 of tChunk then
+    local tId, tCharNum
+    local spellCheckLastWord = false
+
+    put the short id of the selectedField into tId
+    local tFirstChar, tLastChar, i
+
+    ## look for range to check
+    put max(1, word 4 of tChunk) into tFirstChar
+
+    repeat with i = tFirstChar down to 1
+      if _characterEndsWord(character i of field id tId) then
+        put i + 1 into tFirstChar
+        exit repeat
+      end if
+    end repeat
+
+    repeat with i = tFirstChar to the number of characters of field id tId
+      if _characterEndsWord(character i of field id tId) then
+        put i - 1 into tLastChar
+        exit repeat
+      end if
+    end repeat
+
+    if tFirstChar <= tLastChar then
+      set the flagged of character tFirstChar to tLastChar of field id tId to \
+            not spellcheckerCheckWord(character tFirstChar to tLastChar of field id tId)
+    end if
+  end if
+
+  return empty
+end spellcheckerCheckWordAroundInsertionPoint
+
+
+/**
+Summary: Returns whether or not a character ends a word.
+
+Parameters:
+pCharacter: The character to check.
+
+Description:
+Use this function to check characters while a user is typing in order to determine if
+the last word they typed should be spell checked.
+
+Returns: Boolean
+*/
+function spellcheckerCharacterEndsWord pCharacter
+  return _characterEndsWord(pCharacter)
+end spellcheckerCharacterEndsWord
+
+
+/**
+Summary: Returns the property of a character based on the first codepoint.
+
+Returns: letter | number | punctuation | whitespace | non-breaking
+*/
+function spellcheckerCharacterProperty pCharacter
+  return _codepointCategory(codepoint 1 of pCharacter)
+end spellcheckerCharacterProperty
+
+
+/**
+Summary: Called "in time" so that spell checking doesn't slow down users typing.
+
+Returns: nothing
+*/
+command __spellcheckerCheckWord pField, pStartChar, pEndChar
+  if there is a pField then
+    set the flagged of character pStartChar to pEndChar of pField to \
+          not spellcheckerCheckWord(character pStartChar to pEndChar of the text of pField)
+  end if
+end __spellcheckerCheckWord
+
+
+private function _characterEndsWord pCharacter
+  return _codepointCategory(codepoint 1 of pCharacter) is among the items of \
+        (kCategoryPunctuation & "," & kCategoryWhitespace & "," & kCategoryNonBreaking) \
+        and pCharacter is not among the characters of sWordChars
+end _characterEndsWord
+
+
+/**
 Summary: Return a sequence of start+end character indices for each word in `pText`.
 
 Parameters:

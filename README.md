@@ -70,6 +70,66 @@ If you would like to display a menu of dictionaries that the user can select fro
 put spellcheckerAvailableLanguages() into tLanguages
 ```
 
+## Spell check while typing
+
+The following example can be put in a frontscript and will spell check any field that returns `true` for the `uCheckSpelling` property.
+
+```
+local sUserDeletedText
+
+on deleteKey
+  if the uCheckSpelling of the target then
+    put true into sUserDeletedText
+  end if
+  pass deleteKey
+end deleteKey
+
+
+on backspaceKey
+  if the uCheckSpelling of the target then
+    put true into sUserDeletedText
+  end if
+  pass backspaceKey
+end backspaceKey
+
+
+on textChanged
+  # if screen isn't locked then textChanged messages further on down the chain
+  # that might resize the field will cause screen flicker.
+  lock screen
+
+  if the uCheckSpelling of the target then
+    lock screen
+    if sUserDeletedText then
+      put false into sUserDeletedText
+      spellcheckerCheckWordAroundInsertionPoint
+    else
+      spellcheckerCheckLastWordTypedByUser
+    end if
+  end if
+  pass textChanged
+end textChanged
+
+
+on rawKeyUp pKeyNum
+  # Look to spell check word if uses right arrow.
+  if pKeyNum is among the items of "65363" then
+    spellcheckerCheckLastWordTypedByUser
+  end if
+  pass rawKeyUp
+end rawKeyUp
+
+
+on selectionChanged
+  # Catches when user double-clicks on words
+  if the uCheckSpelling of the target \
+        and word 4 of the selectedChunk > word 2 of the selectedChunk then
+    spellcheckerCheckSelectedWord
+  end if
+  pass selectionChanged
+end selectionChanged
+```
+
 ## Adding to your project
 
 The repo is organized in the Levure Helper format so that it can be dropped right into the **helpers** folder of an app built on the Levure framework.
