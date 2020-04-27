@@ -111,6 +111,15 @@ on textChanged
 end textChanged
 
 
+on arrowKey pKey
+  # Account for user changing spelling and then exiting with up/down arrows
+  if pKey is "up" or pKey is "down" then
+    spellcheckerCheckWordAroundInsertionPoint
+  end if
+  pass arrowKey
+end arrowKey
+
+
 on rawKeyUp pKeyNum
   # Look to spell check word if uses right arrow.
   if pKeyNum is among the items of "65363" then
