@@ -72,7 +72,13 @@ put spellcheckerAvailableLanguages() into tLanguages
 
 ## Spell check while typing
 
-The following example can be put in a frontscript and will spell check any field that returns `true` for the `uCheckSpelling` property.
+The following example can be put in a frontscript and will spell check any field that returns `true` for the `uCheckSpelling` property. The code tries to enforce the following rules:
+
+1. If user types a character that ends a word then previous word should be spell checked.
+2. If user presses delete or backspace key then word surrounding the insertion point should be spell checked.
+3. If user presses right arrow key to leave a word then previous word should be spell checked.
+4. If user presses up or down arrow key and leaves a word then word should be spell checked.
+5. If user double-clicks on a word then word should be spell checked.
 
 ```
 local sUserDeletedText
