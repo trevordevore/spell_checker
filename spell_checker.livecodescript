@@ -702,7 +702,7 @@ Summary: Returns the property of a character based on the first codepoint.
 Returns: letter | number | punctuation | whitespace | non-breaking
 */
 function spellcheckerCharacterProperty pCharacter
-  return _codepointCategory(codepoint 1 of pCharacter)
+  return pCharacter is not empty and _codepointCategory(codepoint 1 of pCharacter)
 end spellcheckerCharacterProperty
 
 
@@ -720,7 +720,8 @@ end __spellcheckerCheckWord
 
 
 private function _characterEndsWord pCharacter
-  return _codepointCategory(codepoint 1 of pCharacter) is among the items of \
+  return pCharacter is not empty and \
+        _codepointCategory(codepoint 1 of pCharacter) is among the items of \
         (kCategoryPunctuation & "," & kCategoryWhitespace & "," & kCategoryNonBreaking) \
         and pCharacter is not among the characters of sWordChars
 end _characterEndsWord
