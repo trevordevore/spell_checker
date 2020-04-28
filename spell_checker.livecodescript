@@ -643,7 +643,6 @@ command spellcheckerCheckWordAroundInsertionPoint
   local tChunk
 
   put the selectedChunk into tChunk
-  put tChunk
 
   # Only check if there is no selected text.
   if word 4 of tChunk < word 2 of tChunk then
