@@ -547,12 +547,12 @@ end spellcheckerFindMisspelledWords
 /**
 Summary: Checks to see if the user just finished typing a word and spell checks it if they did.
 
-Parameters:
-pUserJustDeletedCharacter: Pass in `true` if user just used `backspaceKey` or `deleteKey` to delete text. Default is `false`.
-
 Description:
 If no text is selected and the selectedChunk is preceded by a character that ends a word then
 the previous word will be spell checked and flagged if misspelled.
+
+If there is a word character directly following the insertion point then that will be spell checked
+as well.
 
 Returns: nothing
 */
