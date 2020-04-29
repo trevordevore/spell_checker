@@ -75,10 +75,12 @@ put spellcheckerAvailableLanguages() into tLanguages
 The following example can be put in a frontscript and will spell check any field that returns `true` for the `uCheckSpelling` property. The code tries to enforce the following rules:
 
 1. If user types a character that ends a word then previous word should be spell checked.
-2. If user presses delete or backspace key then word surrounding the insertion point should be spell checked.
+2. If user presses the delete or backspace key in a chunk whose `flagged` property is `true` then word surrounding the insertion point should be spell checked.
 3. If user presses right arrow key to leave a word then previous word should be spell checked.
 4. If user presses up or down arrow key and leaves a word then word should be spell checked.
 5. If user double-clicks on a word then word should be spell checked.
+
+Note that the example does not account for spell checking after the user cuts or pastes text. How you implement this will depend on how paste and cut are handled in your application. When pasting, the easiest solution is to spell check the whole field again using `spellcheckerFlagMisspelledWordsInField`, as a user can paste any amount of content and they can split up an existing word into multiple words. When cutting, you can use `spellcheckerCheckWordAroundInsertionPoint` after the text is cut.
 
 ```
 local sUserDeletedText
@@ -108,7 +110,11 @@ on textChanged
     lock screen
     if sUserDeletedText then
       put false into sUserDeletedText
-      spellcheckerCheckWordAroundInsertionPoint
+      # Only update spelling if deleting characters in a misspelled word
+      if the flagged of character (word 2 of the selectedchunk) of field id (the short id of the target) \
+            or the flagged of character (word 4 of the selectedchunk) of field id (the short id of the target) then
+        spellcheckerCheckWordAroundInsertionPoint
+      end if
     else
       spellcheckerCheckLastWordTypedByUser
     end if
