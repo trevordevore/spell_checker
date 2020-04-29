@@ -750,8 +750,6 @@ Based on code provided by the LiveCode team.
 Returns: CR-delimited list of start+end character indices for misspelled words.
 */
 private function _hunspellFindMisspelledWords pText, pOffset
-  constant kJoinLetter = ".'’"
-  constant kJoinNumber = ".-,/"
   constant kJoinEmail = "@"
   constant kJoinDomain = "."
 
@@ -832,11 +830,6 @@ private function _hunspellFindMisspelledWords pText, pOffset
           # Found email (treat as url) or domain
           put tNextCharacter is kJoinEmail into tInsideURL
           put tNextCharacter is kJoinDomain into tPotentialDomain
-          add 2 to tEndIndex
-        else if tNextCategory is tCategory and \
-              ((tCategory is kCategoryNumber and tNextCharacter is among the characters of kJoinNumber) or \
-              (tCategory is kCategoryLetter and tNextCharacter is among the characters of kJoinLetter)) then
-          # Continue with word. E.g. char.char, char'char, num.num, num/num, etc.
           add 2 to tEndIndex
         else
           exit repeat
