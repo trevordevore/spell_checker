@@ -6,6 +6,8 @@ constant kCategoryNumber = "number"
 constant kCategoryPunctuation = "punctuation"
 constant kCategoryWhitespace = "whitespace"
 constant kCategoryNonBreaking = "non-breaking"
+constant kCategoryApostrophe = "apostrophe"
+constant kApostrophes = "'’"
 
 local sTLDsA
 local sRootDictionariesFolders
@@ -565,45 +567,34 @@ command spellcheckerCheckLastWordTypedByUser
   if word 4 of tChunk < word 2 of tChunk then
     local tId, tCharNum
     local spellCheckLastWord = false
+    local tField
 
+    put the long id of the target into tField
     put word 4 of tChunk into tCharNum
     put the short id of the selectedField into tId
 
-    put spellcheckerCharacterEndsWord(character tCharNum of field id tId) into spellCheckLastWord
+    put _characterMightEndWord(character tCharNum of field id tId) into spellCheckLastWord
 
     if spellCheckLastWord then
-      local tFirstChar, tLastChar, i
+      local tFirstStrChar, tLastStrChar, tStr, tAnchorOffset, tChar, i
 
       # Make sure end of word char doesn't carry over flagged setting
       if tCharNum > 0 then
         set the flagged of character tCharNum of field id tId to false
       end if
 
-      ## look for range to check
-      put 1 into tFirstChar
-      put max(1, tCharNum - 1) into tLastChar
+      _charsWithinInnerWhiteSpaceBoundaries the text of field id tId, tCharNum-1, tFirstStrChar, tLastStrChar, tStr, tAnchorOffset
+      if tFirstStrChar > 0 then
+        if _stringIsURL(tStr) then
+          set the flagged of character tFirstStrChar to tLastStrChar of field id tId to false
+        else
+          local tFirstWordChar, tLastWordChar, tWord
 
-      repeat with i = tLastChar down to 1
-        if _characterEndsWord(character i of field id tId) then
-          put i + 1 into tFirstChar
-
-          # Don't spell check if adding additional spaces
-          if tFirstChar is tCharNum - 1 then
-            set the flagged of character tFirstChar to tLastChar of field id tId to false
-            put false into spellCheckLastWord
-            exit repeat
-          else
-            exit repeat
+          _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord
+          if tFirstWordChar > 0 then
+            send "__spellcheckerCheckWord tField, tWord, tFirstWordChar, tLastWordChar" to the target in 10 milliseconds
           end if
         end if
-      end repeat
-
-      # Spell check "in time" so that we don't slow down the users typing.
-      if spellCheckLastWord then
-        local tField
-
-        put the long id of the target into tField
-        send "__spellcheckerCheckWord tField, tFirstChar, tLastChar" to the target in 10 milliseconds
       end if
     end if
   end if
@@ -613,19 +604,65 @@ end spellcheckerCheckLastWordTypedByUser
 
 
 /**
-Summary: If the selection includes a single word it will be spell checked.
+Summary: Spell check the first word in `the selecteChunk`.
 
 Returns: nothing
 */
 command spellcheckerCheckSelectedWord
-  repeat for each character tChar in the selectedText
+  local tChunk, tText, tId, tOffset
+  local tFirstStrChar, tLastStrChar, tStr, tAnchorOffset
+
+  # Early exit if
+  # 1. No selection
+  # 2. If any non-word characters are selected.
+  # 3. If selection is surrounded by letters or numbers signifying an incomplete selection
+  put the selectedChunk into tChunk
+  if word 2 of tChunk > word 4 of tChunk then return empty
+  put the short id of the selectedField into tId
+
+  put the selectedText into tText
+  repeat for each char tChar in the selectedText
     if _characterEndsWord(tChar) then
       return empty
     end if
   end repeat
 
-  if not spellcheckerCheckWord(the selectedText) then
-    set the flagged of the selectedChunk to true
+  put char (word 2 of tChunk - 1) of field id tId into tChar
+  if tChar is not empty and _codepointCategory(codepoint 1 of tChar) \
+        is among the items of (kCategoryLetter &","& kCategoryNumber) then
+    return empty
+  end if
+
+  put char (word 4 of tChunk + 1) of field id tId into tChar
+  if tChar is not empty and _codepointCategory(codepoint 1 of tChar) \
+        is among the items of (kCategoryLetter &","& kCategoryNumber) then
+    return empty
+  end if
+
+  # Now check word
+  put word 2 of tChunk - 1 into tOffset
+
+  _charsWithinInnerWhiteSpaceBoundaries tText, 1, tFirstStrChar, tLastStrChar, tStr, tAnchorOffset
+
+  if tFirstStrChar > 0 then
+    if _stringIsURL(tStr) then
+      set the flagged of char (tOffset+tFirstStrChar) to (tOffset+tLastStrChar) of field id tId to false
+    else
+      local tFirstWordChar, tLastWordChar, tWord
+
+      _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord
+
+      if tFirstWordChar > 0 then
+        add tOffset to tFirstWordChar
+        add tOffset to tLastWordChar
+
+        set the flagged of character tFirstWordChar to tLastWordChar \
+              of field id tId to not spellcheckerCheckWord(tWord)
+      else
+        set the flagged of character tFirstStrChar to tLastStrChar \
+              of field id tId to false
+      end if
+    end if
   end if
 end spellcheckerCheckSelectedWord
 
@@ -650,28 +687,29 @@ command spellcheckerCheckWordAroundInsertionPoint
     local spellCheckLastWord = false
 
     put the short id of the selectedField into tId
-    local tFirstChar, tLastChar, i
+
+    local tAnchorChar, tFirstStrChar, tLastStrChar
+    local tStr, tAnchorOffset
 
     ## look for range to check
-    put max(1, word 4 of tChunk) into tFirstChar
+    put max(1, word 4 of tChunk) into tAnchorChar
 
-    repeat with i = tFirstChar down to 1
-      if _characterEndsWord(character i of field id tId) then
-        put i + 1 into tFirstChar
-        exit repeat
+    _charsWithinInnerWhiteSpaceBoundaries the text of field id tId, tAnchorChar, tFirstStrChar, tLastStrChar, tStr, tAnchorOffset
+    if tFirstStrChar > 0 then
+      if _stringIsURL(tStr) then
+        set the flagged of character tFirstStrChar to tLastStrChar of field id tId to false
+      else
+        local tFirstWordChar, tLastWordChar, tWord
+
+        _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord
+        if tFirstWordChar > 0 then
+          set the flagged of character tFirstWordChar to tLastWordChar of field id tId to not spellcheckerCheckWord(tWord)
+        else
+          set the flagged of the selectedchunk to false
+        end if
       end if
-    end repeat
-
-    repeat with i = tFirstChar to the number of characters of field id tId
-      if _characterEndsWord(character i of field id tId) then
-        put i - 1 into tLastChar
-        exit repeat
-      end if
-    end repeat
-
-    if tFirstChar <= tLastChar then
-      set the flagged of character tFirstChar to tLastChar of field id tId to \
-            not spellcheckerCheckWord(character tFirstChar to tLastChar of field id tId)
+    else
+      set the flagged of the selectedchunk to false
     end if
   end if
 
@@ -680,30 +718,33 @@ end spellcheckerCheckWordAroundInsertionPoint
 
 
 /**
-Summary: Returns whether or not a character ends a word.
+Summary: Returns the property of a character based on the first codepoint.
 
-Parameters:
-pCharacter: The character to check.
-
-Description:
-Use this function to check characters while a user is typing in order to determine if
-the last word they typed should be spell checked.
-
-Returns: Boolean
+Returns: letter | number | punctuation | apostrophe | whitespace | non-breaking
 */
-function spellcheckerCharacterEndsWord pCharacter
-  return _characterEndsWord(pCharacter)
-end spellcheckerCharacterEndsWord
+function spellcheckerCharacterProperty pCharacter
+  if pCharacter is not empty then
+    return _codepointCategory(codepoint 1 of pCharacter)
+  else
+    return empty
+  end if
+end spellcheckerCharacterProperty
 
 
 /**
-Summary: Returns the property of a character based on the first codepoint.
+Summary: Checks whether or not the spell checker considers a string a url. URLs are not spell checked.
 
-Returns: letter | number | punctuation | whitespace | non-breaking
+Parameters:
+pString: The string to check.
+
+Description:
+A string is considered a url if it has `://`, `:\\`, or `@`.
+
+Returns: Boolean
 */
-function spellcheckerCharacterProperty pCharacter
-  return pCharacter is not empty and _codepointCategory(codepoint 1 of pCharacter)
-end spellcheckerCharacterProperty
+function spellCheckerIsURL pString
+  return _stringIsURL(pString)
+end spellCheckerIsURL
 
 
 /**
@@ -711,20 +752,272 @@ Summary: Called "in time" so that spell checking doesn't slow down users typing.
 
 Returns: nothing
 */
-command __spellcheckerCheckWord pField, pStartChar, pEndChar
+command __spellcheckerCheckWord pField, pWord, pStartChar, pEndChar
   if there is a pField then
-    set the flagged of character pStartChar to pEndChar of pField to \
-          not spellcheckerCheckWord(character pStartChar to pEndChar of the text of pField)
+    set the flagged of character pStartChar to pEndChar of pField to not spellcheckerCheckWord(pWord)
   end if
 end __spellcheckerCheckWord
 
 
+/**
+Summary: Returns true if the character might end a word.
+
+Description:
+The "might" comes from the inclusion of apostrophe.
+
+Returns: Boolean
+*/
+private function _characterMightEndWord pCharacter
+  return pCharacter is not empty and \
+        _codepointCategory(codepoint 1 of pCharacter) is among the items of \
+        (kCategoryPunctuation & "," & kCategoryWhitespace & "," & kCategoryApostrophe) \
+        and pCharacter is not among the characters of sWordChars
+end _characterMightEndWord
+
+
+/**
+Summary: Returns true if the character definitely ends a word.
+
+Description:
+Does not include apostrophe.
+
+Returns: Boolean
+*/
 private function _characterEndsWord pCharacter
   return pCharacter is not empty and \
         _codepointCategory(codepoint 1 of pCharacter) is among the items of \
-        (kCategoryPunctuation & "," & kCategoryWhitespace & "," & kCategoryNonBreaking) \
+        (kCategoryPunctuation & "," & kCategoryWhitespace) \
         and pCharacter is not among the characters of sWordChars
 end _characterEndsWord
+
+
+/**
+Summary: Finds the first and last chars that make up the string between whitespace.
+
+Parameters:
+pText: The text to search.
+pAnchorCharNo: The character number to start the search from.
+rFirstChar: > 0 if a string was found.
+rLastChar: > 0 if a string was found.
+rString: The string that was found.
+rAnchorOffset: The value of `pAnchorCharNo` relative to the start of `rString`. Pass as `pAnchorCharNo` param to `_findWordWithinString`.
+
+Returns: nothing
+*/
+private command _charsWithinInnerWhiteSpaceBoundaries pText, pAnchorCharNo, @rFirstChar, @rLastChar, @rString, @rAnchorOffset
+  local tChar
+  local tIndex, tStrLen
+
+  put 0 into rFirstChar
+  put 0 into rLastChar
+  put empty into rString
+  put 0 into rAnchorOffset
+
+  put the number of characters in pText into tStrLen
+  if tStrLen is 0 then return empty
+
+  # Find the character to start building from
+  put pAnchorCharNo into tIndex
+
+  repeat while tIndex > 0
+    put character tIndex of pText into tChar
+    if tChar is not empty and _codepointCategory(codepoint 1 of tChar) is not kCategoryWhitespace then
+      subtract 1 from tIndex
+
+      if tIndex < 1 then
+        put 1 into rFirstChar
+        if pAnchorCharNo is tStrLen then
+          put pAnchorCharNo into rLastChar
+        else
+          put pAnchorCharNo+1 into tIndex
+        end if
+        exit repeat
+      end if
+    else if tIndex < pAnchorCharNo then
+      put tIndex+1 into rFirstChar
+      if pAnchorCharNo is tStrLen then
+        put pAnchorCharNo into rLastChar
+      else
+        put pAnchorCharNo+1 into tIndex
+      end if
+      exit repeat
+    else
+      exit repeat
+    end if
+  end repeat
+
+  if rFirstChar is 0 then
+    put pAnchorCharNo+1 into tIndex
+    repeat while tIndex <= tStrLen
+      put character tIndex of pText into tChar
+      if tChar is not empty and _codepointCategory(codepoint 1 of tChar) is not kCategoryWhitespace then
+        put tIndex into rFirstChar
+        add 1 to tIndex
+        exit repeat
+      else
+        add 1 to tIndex
+      end if
+    end repeat
+  end if
+
+  # Now find the end
+  if rFirstChar > 0 and rLastChar is 0 then
+    repeat while tIndex <= tStrLen
+      put character tIndex of pText into tChar
+      if tChar is not empty and _codepointCategory(codepoint 1 of tChar) is not kCategoryWhitespace then
+        add 1 to tIndex
+
+        if tIndex > tStrLen then
+          put tStrLen into rLastChar
+          exit repeat
+        end if
+      else
+        put tIndex-1 into rLastChar
+        exit repeat
+      end if
+    end repeat
+  end if
+
+  if rFirstChar > 0 and rLastChar > 0 then
+    put character rFirstChar to rLastChar of pText into rString
+  end if
+
+  # Adjust offset so that it is 1 based relative to rString
+  put max(1, pAnchorCharNo - rFirstChar + 1) into rAnchorOffset
+
+  return empty
+end _charsWithinInnerWhiteSpaceBoundaries
+
+
+/**
+Summary: Finds a word to spell check within a string.
+
+Parameters:
+pString: The string to search for a word.
+pAnchorCharNo: Start searching from this character.
+pOffset: The offset of the start of `pString` within the field it was extracted from. Used to return a field relative value for `rFirstChar` and `rLastChar`.
+rFirstChar: > 0 if a word was found.
+rLastChar: > 0 if a word was found.
+rWord: The word that was found.
+
+Description:
+`pString` is extracted using the results from `_charsWithinInnerWhiteSpaceBoundaries`.
+It is assumed it has no whitespace and that it is not a url.
+
+Returns: nothing
+*/
+private command _findWordWithinString pString, pAnchorCharNo, pOffset, @rFirstChar, @rLastChar, @rWord
+  local tChar, tCategory
+  local tIndex, tStrLen
+
+  put 0 into rFirstChar
+  put 0 into rLastChar
+
+  put the number of characters in pString into tStrLen
+  if tStrLen is 0 then return empty
+
+  # Find the character to start building from
+  put pAnchorCharNo into tIndex
+
+  repeat while tIndex > 0
+    if _charIsPartOfWord(pString, tStrLen, tIndex) then
+      subtract 1 from tIndex
+
+      if tIndex < 1 then
+        put 1 into rFirstChar
+        if pAnchorCharNo is tStrLen then
+          put pAnchorCharNo into rLastChar
+        else
+          put pAnchorCharNo+1 into tIndex
+        end if
+        exit repeat
+      end if
+    else if tIndex < pAnchorCharNo then
+      put tIndex+1 into rFirstChar
+      if pAnchorCharNo is tStrLen then
+        put pAnchorCharNo into rLastChar
+      else
+        put pAnchorCharNo+1 into tIndex
+      end if
+      exit repeat
+    else
+      exit repeat
+    end if
+  end repeat
+
+  if rFirstChar is 0 then
+    put pAnchorCharNo+1 into tIndex
+    repeat while tIndex <= tStrLen
+      if _charIsPartOfWord(pString, tStrLen, tIndex) then
+        put tIndex into rFirstChar
+        add 1 to tIndex
+        exit repeat
+      else
+        add 1 to tIndex
+      end if
+    end repeat
+  end if
+
+  # Now find the end
+  if rFirstChar > 0 and rLastChar is 0 then
+    repeat while tIndex <= tStrLen
+      if _charIsPartOfWord(pString, tStrLen, tIndex) then
+        add 1 to tIndex
+
+        if tIndex > tStrLen then
+          put tStrLen into rLastChar
+          exit repeat
+        end if
+      else
+        put tIndex-1 into rLastChar
+        exit repeat
+      end if
+    end repeat
+  end if
+
+  if rFirstChar > 0 and rLastChar > 0 then
+    put character rFirstChar to rLastChar of pString into rWord
+    add pOffset-1 to rFirstChar
+    add pOffset-1 to rLastChar
+  end if
+
+  return empty
+end _findWordWithinString
+
+
+private function _charIsPartOfWord pString, pStrLen, pCharNo
+  local tChar, tCategory
+
+  put character pCharNo of pString into tChar
+  put _codepointCategory(codepoint 1 of tChar) into tCategory
+  # kCategoryLetter or kCategoryNumber? Keep scanning.
+  # kCategoryPunctuation? Done scanning.
+  # kCategoryApostrophe? If preceding character is kCategoryLetter or kCategoryNumber then keep scanning.
+  if tCategory is kCategoryPunctuation then
+    return false
+  else if tCategory is kCategoryApostrophe then
+    if pCharNo is 1 or pCharNo is pStrLen then
+      return false
+    else if _codepointCategory(codepoint 1 of char pCharNo-1 of pString) \
+          is not among the items of (kCategoryLetter &","& kCategoryNumber) then
+      return false
+    else if _codepointCategory(codepoint 1 of char pCharNo+1 of pString) \
+          is not among the items of (kCategoryLetter &","& kCategoryNumber) then
+      return false
+    else
+      return true
+    end if
+  else
+    return true
+  end if
+end _charIsPartOfWord
+
+
+private function _stringIsURL pString
+  return pString contains "://" \
+        or pString contains ":\\" \
+        or pString contains "@"
+end _stringIsURL
 
 
 /**
@@ -745,120 +1038,39 @@ them either.
 The returned value can be assigned to the `flaggedRanges` property of a field to
 visually mark the misspelled words.
 
-Based on code provided by the LiveCode team.
-
 Returns: CR-delimited list of start+end character indices for misspelled words.
 */
 private function _hunspellFindMisspelledWords pText, pOffset
-  constant kJoinEmail = "@"
-  constant kJoinDomain = "."
-
-  local tStartIndex
+  local tStrLen, tFirstStrChar, tLastStrChar, tStr, tAnchorOffset
   local tRanges
-  local tLength
-  local tInsideURL = false
-  local tPotentialDomain = false
 
-  put the number of characters in pText into tLength
+  put the number of characters in pText into tStrLen
 
-  put max(1, pOffset) into tStartIndex
-  repeat while tStartIndex <= tLength
-    // skip to word start
-    local tCategory
+  repeat while pOffset <= tStrLen
+    _charsWithinInnerWhiteSpaceBoundaries pText, pOffset, tFirstStrChar, tLastStrChar, tStr, tAnchorOffset
+    if tFirstStrChar > 0 then
+      if _stringIsURL(tStr) then
+        put tLastStrChar + 1 into pOffset
+      else
+        local tFirstWordChar, tLastWordChar, tWord
 
-    put _codepointCategory(codepoint 1 of char tStartIndex of pText) into tCategory
+        _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord
+        if tFirstWordChar > 0 then
+          if not hunspellSpell(tWord) then
+            put tFirstWordChar & "," & tLastWordChar & cr after tRanges
+          end if
 
-    repeat while tStartIndex < tLength
-      if tCategory is not kCategoryWhitespace and tCategory is not kCategoryPunctuation then
-        exit repeat
+          put tLastWordChar + 1 into pOffset
+        else
+          put tLastStrChar + 1 into pOffset
+        end if
       end if
-      add 1 to tStartIndex
-      put _codepointCategory(codepoint 1 of char tStartIndex of pText) into tCategory
-    end repeat
-
-    if tStartIndex > tLength or tCategory is kCategoryWhitespace or tCategory is kCategoryPunctuation then
+    else
       exit repeat
     end if
-
-    /*
-      Rules for spell checking URLs, emails, and domains:
-      1. Once user has typed :// or the @ character between letters or numbers then scanner is inside of a url
-         and spell checking is turned off until white space is encountered again.
-      2. If scanner is not in a url and user types char|num.char|num then check for potential domain.
-     */
-
-    local tEndIndex
-    put tStartIndex into tEndIndex
-
-    // look for end of word
-    repeat while tEndIndex < tLength
-      local tNextCharacter
-      put character (tEndIndex + 1) of pText into tNextCharacter
-
-      local tNextCategory
-      put _codepointCategory(codepoint 1 of tNextCharacter) into tNextCategory
-      if tNextCategory is kCategoryLetter \
-            or tNextCategory is kCategoryNumber \
-            or tNextCategory is kCategoryNonBreaking \
-            or (tInsideURL and tNextCategory is not kCategoryWhitespace) \
-            then
-        # Continue with word
-        add 1 to tEndIndex
-        put tNextCategory into tCategory
-      else if tInsideURL and tNextCategory is kCategoryWhitespace then
-        # End of url
-        exit repeat
-      else if tEndIndex < tLength - 1 then
-        # Look for special joins characters that continue same word or signify a url, email, or domain.
-        local tThirdCharacter
-        put character (tEndIndex + 2) of pText into tThirdCharacter
-        put _codepointCategory(codepoint 1 of tThirdCharacter) into tNextCategory
-
-        if tNextCharacter is ":" and tThirdCharacter is "/" and character tEndIndex+3 of pText is "/" then
-          # Found url
-          put true into tInsideURL
-          add 3 to tEndIndex
-        else if tNextCharacter is among the characters of sWordChars then
-          # Continue with word
-          # sWordChars is the `WORDCHARS` value from the Hunspell `.aff` file. See `hunspellSetWordChars`.
-          add 1 to tEndIndex
-          put tNextCategory into tCategory
-          put tNextCharacter is kJoinDomain into tPotentialDomain
-        else if (tNextCharacter is kJoinEmail or tNextCharacter is kJoinDomain) \
-              and (tCategory is kCategoryNumber or tCategory is kCategoryLetter) \
-              and (tNextCategory is kCategoryNumber or tNextCategory is kCategoryLetter) then
-          # Found email (treat as url) or domain
-          put tNextCharacter is kJoinEmail into tInsideURL
-          put tNextCharacter is kJoinDomain into tPotentialDomain
-          add 2 to tEndIndex
-        else
-          exit repeat
-        end if
-      else
-        put false into tInsideURL
-        exit repeat
-      end if
-    end repeat
-
-    local tWord
-    local tSpellCheckWord
-    put character tStartIndex to tEndIndex of pText into tWord
-    put not tInsideURL and (not tPotentialDomain or not _wordHasDomain(tWord)) into tSpellCheckWord
-
-    if tSpellCheckWord then
-      if not hunspellSpell(tWord) then
-        put tStartIndex & "," & tEndIndex & cr after tRanges
-      end if
-    end if
-
-    put false into tInsideURL
-    put false into tPotentialDomain
-
-    put tEndIndex + 1 into tStartIndex
   end repeat
 
   delete the last char of tRanges
-
   return tRanges
 end _hunspellFindMisspelledWords
 
@@ -875,9 +1087,12 @@ Based on code provided by the LiveCode team.
 Returns: Classification string. See constants.
 */
 private function _codepointCategory pCodepoint
-  // check if non-breaking space
+  # check if non-breaking space
   if pCodepoint is numToCodepoint(160) then
-    return kCategoryNonBreaking
+    # For spell check purposes this is white space
+    return kCategoryWhitespace
+  else if pCodepoint is among the chars of kApostrophes then
+    return kCategoryApostrophe
   end if
 
   local tCategory
