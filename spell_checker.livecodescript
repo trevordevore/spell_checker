@@ -21,7 +21,7 @@ on libraryStack
     get NSSpellCheckerInitialize()
   else
     local tTLDsA
-    put "com,edu,gov,io,local,mil,net,org,au,ca,cf,cn,de,eu,fr,ga,nl,nl,ru,tk,tv,uk,us" into sTLDsA
+    put "com,edu,gov,io,local,mil,net,org,au,ca,cf,cn,de,es,eu,fr,ga,nl,nz,ru,tk,tv,uk,us" into sTLDsA
     split sTLDsA by "," and "="
   end if
 end libraryStack
