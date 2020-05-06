@@ -1,4 +1,4 @@
-script "community.livecode.trevordevore.spellchecker.library"
+﻿script "community.livecode.trevordevore.spellchecker.library"
 
 constant kVersion = "0.9.3"
 constant kCategoryLetter = "letter"
