@@ -1,6 +1,6 @@
 ﻿script "community.livecode.trevordevore.spellchecker.library"
 
-constant kVersion = "0.9.3"
+constant kVersion = "0.9.4"
 constant kCategoryLetter = "letter"
 constant kCategoryNumber = "number"
 constant kCategoryPunctuation = "punctuation"
