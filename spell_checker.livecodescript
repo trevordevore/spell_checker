@@ -1094,7 +1094,7 @@ private function _codepointCategory pCodepoint
   if pCodepoint is numToCodepoint(160) then
     # For spell check purposes this is white space
     return kCategoryWhitespace
-  else if pCodepoint is among the chars of kApostrophes then
+  else if pCodepoint is among the codepoints of kApostrophes then
     return kCategoryApostrophe
   end if
 
