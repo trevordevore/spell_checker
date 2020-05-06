@@ -951,6 +951,9 @@ private command _findWordWithinString pString, pAnchorCharNo, pOffset, @rFirstCh
       if _charIsPartOfWord(pString, tStrLen, tIndex) then
         put tIndex into rFirstChar
         add 1 to tIndex
+        if tIndex > tStrLen then
+          put tIndex into rLastChar
+        end if
         exit repeat
       else
         add 1 to tIndex
