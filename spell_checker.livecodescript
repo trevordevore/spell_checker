@@ -853,6 +853,9 @@ private command _charsWithinInnerWhiteSpaceBoundaries pText, pAnchorCharNo, @rFi
       if tChar is not empty and _codepointCategory(codepoint 1 of tChar) is not kCategoryWhitespace then
         put tIndex into rFirstChar
         add 1 to tIndex
+        if tIndex > tStrLen then
+          put tStrLen into rLastChar
+        end if
         exit repeat
       else
         add 1 to tIndex
