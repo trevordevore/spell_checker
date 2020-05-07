@@ -588,9 +588,9 @@ command spellcheckerCheckLastWordTypedByUser
         if _stringIsURL(tStr) then
           set the flagged of character tFirstStrChar to tLastStrChar of field id tId to false
         else
-          local tFirstWordChar, tLastWordChar, tWord
+          local tFirstWordChar, tLastWordChar, tWord, tNextWordCharInStr
 
-          _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord
+          _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord, tNextWordCharInStr
           if tFirstWordChar > 0 then
             send "__spellcheckerCheckWord tField, tWord, tFirstWordChar, tLastWordChar" to the target in 10 milliseconds
           end if
@@ -648,9 +648,9 @@ command spellcheckerCheckSelectedWord
     if _stringIsURL(tStr) then
       set the flagged of char (tOffset+tFirstStrChar) to (tOffset+tLastStrChar) of field id tId to false
     else
-      local tFirstWordChar, tLastWordChar, tWord
+      local tFirstWordChar, tLastWordChar, tWord, tNextWordCharInStr
 
-      _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord
+      _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord, tNextWordCharInStr
 
       if tFirstWordChar > 0 then
         add tOffset to tFirstWordChar
@@ -699,9 +699,9 @@ command spellcheckerCheckWordAroundInsertionPoint
       if _stringIsURL(tStr) then
         set the flagged of character tFirstStrChar to tLastStrChar of field id tId to false
       else
-        local tFirstWordChar, tLastWordChar, tWord
+        local tFirstWordChar, tLastWordChar, tWord, tNextWordCharInStr
 
-        _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord
+        _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord, tNextWordCharInStr
         if tFirstWordChar > 0 then
           set the flagged of character tFirstWordChar to tLastWordChar of field id tId to not spellcheckerCheckWord(tWord)
         else
@@ -898,10 +898,11 @@ Summary: Finds a word to spell check within a string.
 Parameters:
 pString: The string to search for a word.
 pAnchorCharNo: Start searching from this character.
-pOffset: The offset of the start of `pString` within the field it was extracted from. Used to return a field relative value for `rFirstChar` and `rLastChar`.
+pOffset: The offset of the start of `pString` within the larger string it was extracted from. Used to return a string relative value for `rFirstChar` and `rLastChar`.
 rFirstChar: > 0 if a word was found.
 rLastChar: > 0 if a word was found.
 rWord: The word that was found.
+rNextWordCharInStr: If there is another word in `pString` then this will be set to that char no.
 
 Description:
 `pString` is extracted using the results from `_charsWithinInnerWhiteSpaceBoundaries`.
@@ -909,12 +910,13 @@ It is assumed it has no whitespace and that it is not a url.
 
 Returns: nothing
 */
-private command _findWordWithinString pString, pAnchorCharNo, pOffset, @rFirstChar, @rLastChar, @rWord
+private command _findWordWithinString pString, pAnchorCharNo, pOffset, @rFirstChar, @rLastChar, @rWord, @rNextWordCharInStr
   local tChar, tCategory
   local tIndex, tStrLen
 
   put 0 into rFirstChar
   put 0 into rLastChar
+  put 0 into rNextWordCharInStr
 
   put the number of characters in pString into tStrLen
   if tStrLen is 0 then return empty
@@ -981,10 +983,22 @@ private command _findWordWithinString pString, pAnchorCharNo, pOffset, @rFirstCh
     end repeat
   end if
 
+  if rLastChar > 0 then
+    repeat with tIndex = rLastChar+1 to tStrLen
+      if _charIsPartOfWord(pString, tStrLen, tIndex) then
+        put tIndex into rNextWordCharInStr
+        exit repeat
+      end if
+    end repeat
+  end if
+
   if rFirstChar > 0 and rLastChar > 0 then
     put character rFirstChar to rLastChar of pString into rWord
     add pOffset-1 to rFirstChar
     add pOffset-1 to rLastChar
+    if rNextWordCharInStr > 0 then
+      add pOffset-1 to rNextWordCharInStr
+    end if
   end if
 
   return empty
@@ -1033,7 +1047,7 @@ Parameters:
 pText: The string to spell check.
 
 Description:
-This function will find an spell check each word in `pText`. If a misspelled word
+This function will find and spell check each word in `pText`. If a misspelled word
 is found then a COMMA-delimited list of the start+end character numbers is added to
 a CR-delimited list of ranges that will be returned.
 
@@ -1058,15 +1072,20 @@ private function _hunspellFindMisspelledWords pText, pOffset
       if _stringIsURL(tStr) then
         put tLastStrChar + 1 into pOffset
       else
-        local tFirstWordChar, tLastWordChar, tWord
+        local tFirstWordChar, tLastWordChar, tWord, tNextWordCharInStr
 
-        _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord
+        # There may be multiple words e.g. this/'it's'/test
+        _findWordWithinString tStr, tAnchorOffset, tFirstStrChar, tFirstWordChar, tLastWordChar, tWord, tNextWordCharInStr
         if tFirstWordChar > 0 then
           if not hunspellSpell(tWord) then
             put tFirstWordChar & "," & tLastWordChar & cr after tRanges
           end if
 
-          put tLastWordChar + 1 into pOffset
+          if tNextWordCharInStr > 0 then
+            put tNextWordCharInStr into pOffset
+          else
+            put tLastStrChar + 1 into pOffset
+          end if
         else
           put tLastStrChar + 1 into pOffset
         end if
