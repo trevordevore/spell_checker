@@ -952,7 +952,7 @@ private command _findWordWithinString pString, pAnchorCharNo, pOffset, @rFirstCh
         put tIndex into rFirstChar
         add 1 to tIndex
         if tIndex > tStrLen then
-          put tIndex into rLastChar
+          put tStrLen into rLastChar
         end if
         exit repeat
       else
