@@ -161,6 +161,16 @@ To use in a non-Levure project you will need to do the following:
 2) Install the .lce files in LiveCode: https://lessons.livecode.com/m/4071/l/1031437-how-to-install-an-extension-using-the-extension-manager
 3) Open the spell_checker.livecodescript stack and `start using` it as a library.
 
+## DLL dependencies on Windows
+
+The `libhunspell.dll` requires that `MSVCP140.dll` and `VCRUNTIME140.dll` be installed. If your application is built with the Windows 32-bit LiveCode engine a user may not have those files in the `SysWOW64` folder.
+
+To fix the issue install the "Microsoft Visual C++ Redistributable for Visual Studio 2015, 2017 and 2019" x86 installer available at the following url below.
+
+https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0
+
+If you see the error message and your app is built with the Windows 64-bit LiveCode engine then install the x64 installer. I am not aware of situations where this has occurred though.
+
 # Additional information on dictionary files
 
 The following web page may be helpful in understanding how the .dic and .aff files that make up a dictionary are formatted:
