@@ -1,4 +1,4 @@
-﻿script "community.livecode.trevordevore.spellchecker.library"
+script "community.livecode.trevordevore.spellchecker.library"
 
 constant kVersion = "0.9.5"
 constant kCategoryLetter = "letter"
@@ -182,7 +182,10 @@ pLanguage: The language to load. Must match name of a dictionary folder.
 Description:
 Looks for the dictionary in the `sRootDictionariesFolders` folder.
 
-Returns: True if the language was successfully initialized.
+If an error occurs when calling `hunspellInitialize` then the error
+"The spell checking module failed to load" will be returned.
+
+Returns: Error message
 */
 private command _loadDictionaryForLanguage pLanguage
   local tError
@@ -207,9 +210,15 @@ private command _loadDictionaryForLanguage pLanguage
     end if
 
     if tAffixFiles is not empty then
-      hunspellInitialize \
-            tFolder & "/" & pLanguage & "/" & line 1 of tAffixFiles, \
-            tFolder & "/" & pLanguage & "/" & line 1 of tDictFiles
+      try
+        hunspellInitialize \
+              tFolder & "/" & pLanguage & "/" & line 1 of tAffixFiles, \
+              tFolder & "/" & pLanguage & "/" & line 1 of tDictFiles
+      catch tError
+        if tError contains "unable to load foreign library" then
+          put "The spell check module failed to load" into tError
+        end if
+      end try
 
       # Load additional dict files
       local tLineNo, tRslt
